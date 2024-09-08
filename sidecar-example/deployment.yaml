@@ -1,0 +1,65 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx-fluentd
+  labels:
+    app: nginx-fluentd
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nginx-fluentd
+  template:
+    metadata:
+      labels:
+        app: nginx-fluentd
+    spec:
+      containers:
+      # Main application container (Nginx)
+      - name: nginx
+        image: nginx:latest
+        resources:
+          limits:
+            cpu: 100m
+            memory: 128Mi
+          requests:
+            cpu: 100m
+            memory: 128Mi
+        ports:
+        - containerPort: 80
+        volumeMounts:
+        - name: nginx-logs
+          mountPath: /var/log/nginx
+        # Nginx logs to stdout and to a log file
+        command: ["/bin/sh"]
+        args:
+          - -c
+          - |
+            echo "Starting Nginx..." && \
+            nginx -g 'daemon off;' && \
+            tail -f /var/log/nginx/access.log
+      # Sidecar container (Fluentd)
+      - name: fluentd
+        image: fluent/fluentd:v1.17.1-1.0
+        resources:
+          limits:
+            cpu: 100m
+            memory: 128Mi
+          requests:
+            cpu: 100m
+            memory: 128Mi
+        volumeMounts:
+        - name: nginx-logs
+          mountPath: /var/log/nginx
+        # Fluentd configuration to forward logs
+        command: ["fluentd"]
+        args:
+          - "--no-supervisor"
+          - "-q"
+        env:
+        - name: FLUENTD_ARGS
+          value: "--config /fluentd/etc/fluent.conf"
+      # Shared volume for log files
+      volumes:
+      - name: nginx-logs
+        emptyDir: {}
